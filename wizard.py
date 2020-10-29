@@ -32,11 +32,7 @@ class InfoPage(QWizardPage):
     def __init__(self, parent=None):
         super(InfoPage, self).__init__(parent)
 
-        label = QLabel("This wizard will generate a skeleton C++ class "
-            "definition, including a few functions. You simply need to "
-            "specify the class name and set a few options to produce a "
-            "header file and an implementation file for your new C++ "
-            "class.")
+        label = QLabel("This wizard creates a forensic image with ewfadquire")
         label.setWordWrap(True)
 
         layout = QVBoxLayout()
@@ -156,11 +152,7 @@ class ConclusionPage(QWizardPage):
     def __init__(self, parent=None):
         super(ConclusionPage, self).__init__(parent)
 
-        label = QLabel("This wizard will generate a skeleton C++ class "
-            "definition, including a few functions. You simply need to "
-            "specify the class name and set a few options to produce a "
-            "header file and an implementation file for your new C++ "
-            "class.")
+        label = QLabel("The forensic image was created.")
         label.setWordWrap(True)
 
         layout = QVBoxLayout()
