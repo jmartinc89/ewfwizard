@@ -11,7 +11,8 @@ from PySide2.QtWidgets import (QApplication, QWizard, QWizardPage, QVBoxLayout,
     QRadioButton, QComboBox, QLineEdit, QPushButton, QGridLayout, QInputDialog)
 from PySide2.QtCore import (QThread, QObject, Signal, Slot)
 from PySide2.QtGui import QTextCursor
-import subprocess
+from subprocess import Popen, PIPE, run
+from pathlib import PurePath
 import re
 import json
 
@@ -69,7 +70,7 @@ class SelectionPage(QWizardPage):
         self.setButtonText(QWizard.NextButton, "Acquire")
 
     def list_paths(self):
-        process = subprocess.run(["/bin/lsblk", "--json", "-o", "PATH"], capture_output=True, text=True)
+        process = run(["/bin/lsblk", "--json", "-o", "PATH"], capture_output=True, text=True)
         units = json.loads(process.stdout)
         return [blockdevice['path'] for blockdevice in units['blockdevices']]
 
@@ -80,8 +81,16 @@ class SelectionPage(QWizardPage):
             self.combo.addItem(path)
 
     def openDialog(self):
-        filename, _ = QFileDialog.getOpenFileName(self)
-        self.line.insert(filename)
+        fileDialog = QFileDialog(self)
+        fileDialog.setNameFilter("Encase Witness Compression Format (*.E??)")
+        fileDialog.setAcceptMode(QFileDialog.AcceptSave)
+        fileDialog.setLabelText(QFileDialog.LookIn, "Save forensic image")
+        fileDialog.setOption(QFileDialog.ReadOnly, True)
+        if fileDialog.exec_():
+            filepath = PurePath(fileDialog.selectedFiles()[0])
+            if filepath.suffix:
+                filepath = filepath.with_suffix('')
+            self.line.insert(str(filepath))
 
     def validatePage(self):
         # Hay que recorrer una rray de hijos y ver que ninguno esté activo
@@ -96,22 +105,27 @@ class AcquireWorker(QObject):
         super(AcquireWorker, self).__init__()
         self.input_filename = input_filename
         self.output_filename = output_filename
+        self.digest_type = "sha1"
 
 
     @Slot()
     def start(self):
-        process = subprocess.Popen(["/usr/bin/ewfacquire", "-u", "-l", self.output_filename + ".log", "-t", self.output_filename, self.input_filename],
-                                           stdout=subprocess.PIPE, text=True)
-        regex = re.compile('Status: at (\d+)%')
-        regex2 = re.compile('Acquiry completed at:')
-        for line in iter(process.stdout.readline, ''):
-            self.log.emit(line)
-            match = regex.search(line)
-            if match:
-                self.progress.emit(int(match.group(1)))
-            match2 = regex2.search(line)
-            if match2:
-                self.progress.emit(100)
+        command = ["/usr/bin/ewfacquire", "-u", "-d", self.digest_type, "-t", self.output_filename, self.input_filename]
+        with Popen(command,stdout=PIPE, text=True) as process:
+            regex = re.compile('Status: at (\d+)%')
+            regex2 = re.compile('Acquiry completed at:')
+            log_path = PurePath(self.output_filename).with_suffix('.log')
+            log_file = open(str(log_path), 'w', encoding='utf-8')
+            for line in iter(process.stdout.readline, ''):
+                log_file.write(line)
+                self.log.emit(line)
+                match = regex.search(line)
+                if match:
+                    self.progress.emit(int(match.group(1)))
+                match2 = regex2.search(line)
+                if match2:
+                    self.progress.emit(100)
+            log_file.close()
 
 
 class StatusPage(QWizardPage):
